@@ -6,6 +6,34 @@ KARPENTER_NAMESPACE ?= kube-system
 AWS_PARTITION ?= aws
 AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text)
 
+.DEFAULT_GOAL := help
+
+.PHONY: help
+help:
+	@echo "EKS / Karpenter makefile"
+	@echo ""
+	@echo "Targets:"
+	@echo "  help                     Show this help"
+	@echo "  check                    Verify AWS identity and print cluster context"
+	@echo "  create-roles             Create cluster and node IAM roles"
+	@echo "  create-cluster           Deploy Karpenter CFN stack and create EKS cluster"
+	@echo "  update-cluster-version   Upgrade EKS control plane to K8S_VERSION"
+	@echo "  wire-karpenter-iam       Configure pod identity and node IAM mapping"
+	@echo "  install-karpenter        Install/upgrade Karpenter via Helm"
+	@echo "  install-karpenter-config Apply NodeClass and NodePool manifests"
+	@echo "  setup                    Full bootstrap: roles, cluster, Karpenter"
+	@echo "  destroy                  Delete EKS cluster and Karpenter CFN stack"
+	@echo ""
+	@echo "Variables (override with VAR=value):"
+	@echo "  CLUSTER_NAME=$(CLUSTER_NAME)"
+	@echo "  REGION=$(REGION)"
+	@echo "  K8S_VERSION=$(K8S_VERSION)"
+	@echo "  KARPENTER_VERSION=$(KARPENTER_VERSION)"
+	@echo "  KARPENTER_NAMESPACE=$(KARPENTER_NAMESPACE)"
+	@echo ""
+	@echo "Example:"
+	@echo "  make update-cluster-version K8S_VERSION=1.31"
+
 .PHONY: check
 check:
 	@aws sts get-caller-identity | cat
@@ -38,6 +66,16 @@ create-cluster: check
 		--capabilities CAPABILITY_NAMED_IAM
 	@echo "Creating EKS Cluster with eksctl..."
 	AWS_ACCOUNT_ID=$(AWS_ACCOUNT_ID) envsubst '$${AWS_ACCOUNT_ID}' < cluster.yaml | eksctl create cluster -f -
+
+.PHONY: update-cluster-version
+update-cluster-version: check
+	@echo "Updating EKS control plane to $(K8S_VERSION)..."
+	aws eks update-cluster-version \
+		--name $(CLUSTER_NAME) \
+		--region $(REGION) \
+		--kubernetes-version $(K8S_VERSION)
+	@echo "Upgrade started. Check status with:"
+	@echo "  aws eks describe-cluster --name $(CLUSTER_NAME) --region $(REGION) --query 'cluster.{status:status,version:version}'"
 
 .PHONY: wire-karpenter-iam
 wire-karpenter-iam: check
