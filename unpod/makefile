@@ -39,7 +39,7 @@ help:
 	@echo "  build              Build all images (amd64)"
 	@echo "  push               Push all images to ECR"
 	@echo "  build-push         Build + push"
-	@echo "  secrets            Create/update K8s secrets from .env.prod"
+	@echo "  secrets            Create/update K8s secrets from .env"
 	@echo "  deploy-platform    Apply platform manifests (web/api/centrifugo)"
 	@echo "  deploy-voice       Apply voice-executor + HPA"
 	@echo "  install-gpu-plugin Install NVIDIA device plugin (DaemonSet)"
@@ -122,13 +122,13 @@ build-push: ecr-create build push
 
 .PHONY: secrets
 secrets:
-	@test -f .env.prod || (echo "Missing .env.prod — copy from .env.prod.example" && exit 1)
+	@test -f .env || (echo "Missing .env — copy from .env.prod.example" && exit 1)
 	kubectl get ns $(NAMESPACE) >/dev/null 2>&1 || kubectl create namespace $(NAMESPACE)
 	kubectl -n $(NAMESPACE) create secret generic unpod-secrets \
-		--from-env-file=.env.prod \
+		--from-env-file=.env \
 		--dry-run=client -o yaml | kubectl apply -f -
 	kubectl -n $(NAMESPACE) create secret generic voice-executor-secrets \
-		--from-env-file=.env.prod \
+		--from-env-file=.env \
 		--dry-run=client -o yaml | kubectl apply -f -
 
 .PHONY: _render

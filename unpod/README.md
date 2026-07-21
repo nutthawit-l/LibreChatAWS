@@ -18,7 +18,7 @@ Optional: self-hosted LLM via vLLM on `gpu-pool`.
   - `make -C postgres deploy`
   - `make -C redis deploy`
   - `make -C mongo deploy`
-  Then copy connection strings from each `make conninfo` into `unpod/.env.prod`
+  Then copy connection strings from each `make conninfo` into `unpod/.env`
 - LiveKit Cloud (or self-hosted) + STT/TTS API keys
 - For self-hosted LLM: GPU NodeClass + NVIDIA device plugin (see below)
 
@@ -28,8 +28,8 @@ Optional: self-hosted LLM via vLLM on `gpu-pool`.
 cd unpod
 
 # 1. Fill secrets
-cp .env.prod.example .env.prod
-# edit .env.prod — DB/LiveKit/AI keys + PUBLIC_* URLs
+cp .env.prod.example .env
+# edit .env — DB/LiveKit/AI keys + PUBLIC_* URLs
 
 # 2. Build & push images (clones unpod into .cache/unpod)
 make build-push
@@ -74,7 +74,7 @@ alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:ACCOUNT:certifi
 3. **NVIDIA device plugin** exposes GPUs to the scheduler (`make install-gpu-plugin`).
 4. **vLLM** serves OpenAI-compatible API at `http://vllm.unpod.svc.cluster.local:8000/v1`.
 
-Wire Unpod / clients via `.env.prod`:
+Wire Unpod / clients via `.env`:
 
 ```bash
 OPENAI_BASE_URL=http://vllm.unpod.svc.cluster.local:8000/v1
@@ -98,7 +98,7 @@ Default model `Qwen/Qwen2.5-7B-Instruct` fits **g5.xlarge** (A10G 24GB). First s
 | `clone-unpod` | Fetch upstream source |
 | `ecr-create` | Create 4 ECR repos |
 | `build-push` | Build amd64 images + push |
-| `secrets` | Apply `.env.prod` as K8s secrets |
+| `secrets` | Apply `.env` as K8s secrets |
 | `deploy-platform` | web / APIs / centrifugo / ingress |
 | `deploy-voice` | voice-executor + HPA |
 | `install-gpu-plugin` | NVIDIA device plugin DaemonSet |
@@ -134,5 +134,5 @@ postgres/ redis/ mongo/   # PoC self-hosted DBs
 - Images are forced to `linux/amd64` to match Karpenter pools (system nodes are ARM `t4g`).
 - Voice pods request **8 CPU / 16Gi** each. Expect Karpenter to launch larger `c`/`m`/`r` instances.
 - GPU nodes are expensive — deploy LLM only when needed; Karpenter consolidates after idle (`consolidateAfter: 5m` on gpu-pool).
-- Do not commit `.env.prod`.
+- Do not commit `.env`.
 - Prefect (optional) is not wired here; use upstream `apps/super/deployment/k8s` Prefect overlays if needed.
