@@ -7,7 +7,7 @@ Optional: self-hosted LLM via vLLM on `gpu-pool`.
 
 - EKS cluster up (`make -C eks setup` / Karpenter NodePools applied)
 - `kubectl` context pointing at `core-cluster`
-- Docker + AWS CLI
+- Docker or Podman + AWS CLI
 - AWS Load Balancer Controller installed (for ALB Ingress)
 - Managed data stores in the same VPC:
   - RDS PostgreSQL 16
@@ -21,6 +21,7 @@ Optional: self-hosted LLM via vLLM on `gpu-pool`.
   Then copy connection strings from each `make conninfo` into `unpod/.env`
 - LiveKit Cloud (or self-hosted) + STT/TTS API keys
 - For self-hosted LLM: GPU NodeClass + NVIDIA device plugin (see below)
+- Optional observability: Grafana Cloud via `make -C ../grafana deploy`
 
 ## Quick path
 
@@ -45,6 +46,9 @@ make deploy-llm                           # default: Qwen/Qwen2.5-7B-Instruct
 
 # 5. Watch
 make status
+
+# 6. (Optional) Ship metrics/logs/OTLP to Grafana Cloud
+make -C ../grafana deploy
 ```
 
 Point DNS (or Route53 alias) at the ALB hostname from `kubectl -n unpod get ingress`.
@@ -127,6 +131,7 @@ eks/                      # cluster bootstrap
     nodeclass-gpu.yaml
     nodepool-gpu.yaml
 postgres/ redis/ mongo/   # PoC self-hosted DBs
+grafana/                  # Grafana Cloud (Alloy / k8s-monitoring)
 ```
 
 ## Notes
