@@ -26,6 +26,10 @@ spec:
         - key: karpenter.k8s.aws/instance-generation
           operator: Gt
           values: ["5"]
+        # medium/~1 vCPU ≈ 8 maxPods — DaemonSets (Alloy logs, node-exporter) + LibreChat fill it.
+        - key: karpenter.k8s.aws/instance-size
+          operator: NotIn
+          values: ["nano", "micro", "small", "medium"]
 
   limits:
     cpu: 1000   # ปรับตามงบประมาณ

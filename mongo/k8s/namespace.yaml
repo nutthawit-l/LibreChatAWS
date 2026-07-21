@@ -4,4 +4,4 @@ metadata:
   name: mongo
   labels:
     app.kubernetes.io/name: mongo
-    app.kubernetes.io/part-of: unpod-poc
+    app.kubernetes.io/part-of: librechat-poc

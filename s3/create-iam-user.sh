@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Create IAM user + access key for Unpod S3 media bucket, write into unpod/.env
+# Create IAM user + access key for LibreChat S3 bucket, write into librechat/.env
 set -euo pipefail
 
-BUCKET_NAME="${BUCKET_NAME:-unpod-media-core-cluster}"
+BUCKET_NAME="${BUCKET_NAME:-librechat-media-core-cluster}"
 REGION="${REGION:-us-east-1}"
-IAM_USER="${IAM_USER:-unpod-s3-poc}"
-POLICY_NAME="${POLICY_NAME:-UnpodS3MediaPoC}"
+IAM_USER="${IAM_USER:-librechat-s3-poc}"
+POLICY_NAME="${POLICY_NAME:-LibreChatS3MediaPoC}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-ENV_FILE="${ENV_FILE:-$ROOT_DIR/unpod/.env}"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/librechat/.env}"
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 
 echo "Account: $ACCOUNT_ID | User: $IAM_USER | Bucket: $BUCKET_NAME"
@@ -46,7 +46,7 @@ if ! aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
   aws iam create-policy \
     --policy-name "$POLICY_NAME" \
     --policy-document "$POLICY_DOC" \
-    --description "PoC access to Unpod media S3 bucket" >/dev/null
+    --description "PoC access to LibreChat media S3 bucket" >/dev/null
   echo "Created policy $POLICY_ARN"
 else
   echo "Policy exists: $POLICY_ARN"
@@ -65,7 +65,7 @@ ACCESS_KEY="$(echo "$CREDS_JSON" | python3 -c 'import sys,json; print(json.load(
 SECRET_KEY="$(echo "$CREDS_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["AccessKey"]["SecretAccessKey"])')"
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  echo "Missing $ENV_FILE" >&2
+  echo "Missing $ENV_FILE — cp librechat/.env.example librechat/.env first" >&2
   exit 1
 fi
 
@@ -76,8 +76,8 @@ text = pathlib.Path(path).read_text()
 replacements = {
     "AWS_ACCESS_KEY_ID": ak,
     "AWS_SECRET_ACCESS_KEY": sk,
-    "AWS_STORAGE_BUCKET_NAME": bucket,
-    "AWS_S3_REGION_NAME": region,
+    "AWS_BUCKET_NAME": bucket,
+    "AWS_REGION": region,
 }
 out = []
 for line in text.splitlines():

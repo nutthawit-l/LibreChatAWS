@@ -24,7 +24,8 @@ help:
 	@echo "  install-ebs-csi          Install EBS CSI addon + gp3 StorageClass"
 	@echo "  setup                    Full bootstrap: roles, cluster, Karpenter"
 	@echo "  destroy                  Delete EKS cluster and Karpenter CFN stack"
-	@echo "  unpod-help               Show Unpod deploy targets (../unpod)"
+	@echo "  librechat-help           Show LibreChat deploy targets (../librechat)"
+	@echo "  ingress-help             Show ALB controller targets (../ingress)"
 	@echo ""
 	@echo "Variables (override with VAR=value):"
 	@echo "  CLUSTER_NAME=$(CLUSTER_NAME)"
@@ -35,11 +36,16 @@ help:
 	@echo ""
 	@echo "Example:"
 	@echo "  make update-cluster-version K8S_VERSION=1.31"
-	@echo "  make -C ../unpod build-push && make -C ../unpod deploy DOMAIN=example.com"
+	@echo "  make -C ../ingress deploy"
+	@echo "  make -C ../librechat deploy"
 
-.PHONY: unpod-help
-unpod-help:
-	@$(MAKE) -C ../unpod help
+.PHONY: librechat-help
+librechat-help:
+	@$(MAKE) -C ../librechat help
+
+.PHONY: ingress-help
+ingress-help:
+	@$(MAKE) -C ../ingress help
 
 .PHONY: check
 check:
@@ -143,6 +149,8 @@ install-ebs-csi: check
 setup: create-roles create-cluster install-karpenter install-karpenter-config install-ebs-csi
 	@echo "Setup complete"
 	@echo "Run: aws eks update-kubeconfig --name $(CLUSTER_NAME) --region $(REGION)"
+	@echo "Next: make -C ../ingress deploy   # AWS Load Balancer Controller (ALB)"
+	@echo "Then: make -C ../librechat deploy"
 
 .PHONY: destroy
 destroy:

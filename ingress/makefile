@@ -12,7 +12,7 @@ POLICY_NAME ?= AWSLoadBalancerControllerIAMPolicy
 ROLE_NAME ?= $(CLUSTER_NAME)-aws-load-balancer-controller
 AWS_PARTITION ?= aws
 AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text 2>/dev/null)
-DOMAIN ?= unpod.ntwtech.com
+DOMAIN ?= librechat.ntwtech.com
 
 -include .env
 export
@@ -20,7 +20,7 @@ export
 CLUSTER_NAME := $(or $(CLUSTER_NAME),core-cluster)
 REGION := $(or $(REGION),us-east-1)
 NAMESPACE := $(or $(NAMESPACE),kube-system)
-DOMAIN := $(or $(DOMAIN),unpod.ntwtech.com)
+DOMAIN := $(or $(DOMAIN),librechat.ntwtech.com)
 
 POLICY_ARN := arn:$(AWS_PARTITION):iam::$(AWS_ACCOUNT_ID):policy/$(POLICY_NAME)
 ROLE_ARN := arn:$(AWS_PARTITION):iam::$(AWS_ACCOUNT_ID):role/$(ROLE_NAME)
@@ -40,7 +40,7 @@ help:
 	@echo "  ingressclass   Apply IngressClass named alb"
 	@echo "  deploy         Install/upgrade controller + IngressClass"
 	@echo "  status         Controller pods + cluster Ingresses"
-	@echo "  endpoints      Print Unpod ALB hostname (after unpod deploy)"
+	@echo "  endpoints      Print LibreChat ALB hostname (after librechat deploy)"
 	@echo "  logs           Tail controller logs"
 	@echo "  destroy        Uninstall Helm release (keeps IAM; does not delete ALBs)"
 	@echo ""
@@ -48,7 +48,7 @@ help:
 	@echo "Usage:"
 	@echo "  cp .env.example .env   # optional ACM_CERTIFICATE_ARN"
 	@echo "  make deploy"
-	@echo "  make -C ../unpod deploy"
+	@echo "  make -C ../librechat deploy"
 	@echo ""
 	@echo "Variables:"
 	@echo "  CLUSTER_NAME=$(CLUSTER_NAME)  REGION=$(REGION)  NAMESPACE=$(NAMESPACE)"
@@ -135,7 +135,7 @@ crds:
 .PHONY: ingressclass
 ingressclass:
 	kubectl apply -f k8s/ingressclass-alb.yaml
-	@echo "IngressClass alb applied (matches unpod ingressClassName)"
+	@echo "IngressClass alb applied (matches LibreChat ingressClassName)"
 
 .PHONY: deploy
 deploy: create-iam tag-subnets repo ingressclass
@@ -152,8 +152,8 @@ deploy: create-iam tag-subnets repo ingressclass
 		--wait --timeout 5m
 	@$(MAKE) --no-print-directory status
 	@echo ""
-	@echo "Next: make -C ../unpod deploy"
-	@echo "Optional ACM: set ACM_CERTIFICATE_ARN in .env then re-deploy Unpod"
+	@echo "Next: make -C ../librechat deploy"
+	@echo "Optional ACM: set ACM_CERTIFICATE_ARN in .env (SAN: librechat.ntwtech.com) then re-deploy LibreChat"
 
 .PHONY: status
 status:
@@ -171,18 +171,21 @@ status:
 
 .PHONY: endpoints
 endpoints:
-	@echo "Unpod ALB (after make -C ../unpod deploy):"
-	@HOST=$$(kubectl -n unpod get ingress unpod -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null); \
+	@echo "LibreChat ALB (after make -C ../librechat deploy):"
+	@HOST=$$(kubectl -n librechat get ingress librechat -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null); \
+	if [ -z "$$HOST" ]; then \
+		HOST=$$(kubectl -n librechat get ingress -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}' 2>/dev/null); \
+	fi; \
 	if [ -n "$$HOST" ]; then \
 		echo "  ALB hostname: $$HOST"; \
-		echo "  Point DNS for app/api/chat/realtime.$(DOMAIN) → $$HOST (Alias A / CNAME)"; \
+		echo "  Point DNS for $(DOMAIN) → $$HOST (Alias A / CNAME)"; \
 	else \
-		echo "  (Ingress not ready yet — deploy Unpod, then re-run make endpoints)"; \
+		echo "  (Ingress not ready yet — deploy LibreChat, then re-run make endpoints)"; \
 	fi
 	@if [ -n "$(ACM_CERTIFICATE_ARN)" ]; then \
 		echo "  ACM: $(ACM_CERTIFICATE_ARN)"; \
 	else \
-		echo "  Tip: set ACM_CERTIFICATE_ARN in .env for HTTPS on Unpod Ingress"; \
+		echo "  Tip: set ACM_CERTIFICATE_ARN in .env for HTTPS (SAN must include $(DOMAIN))"; \
 	fi
 
 .PHONY: logs
@@ -195,4 +198,4 @@ destroy:
 	helm -n $(NAMESPACE) uninstall $(RELEASE) --wait 2>/dev/null || true
 	kubectl delete ingressclass alb --ignore-not-found
 	@echo "Kept IAM role/policy and Pod Identity association."
-	@echo "To remove Unpod Ingress/ALB: make -C ../unpod destroy-app"
+	@echo "To remove LibreChat Ingress/ALB: make -C ../librechat destroy"

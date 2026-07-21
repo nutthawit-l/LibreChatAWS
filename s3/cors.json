@@ -4,9 +4,8 @@
       "AllowedHeaders": ["*"],
       "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
       "AllowedOrigins": [
-        "https://app.unpod.ntwtech.com",
-        "https://api.unpod.ntwtech.com",
-        "http://localhost:3000"
+        "https://librechat.ntwtech.com",
+        "http://localhost:3080"
       ],
       "ExposeHeaders": ["ETag", "x-amz-request-id"],
       "MaxAgeSeconds": 3000

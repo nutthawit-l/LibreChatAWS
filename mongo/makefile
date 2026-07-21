@@ -59,6 +59,5 @@ conninfo:
 	PASS=$$(grep ^MONGO_PASSWORD= .env 2>/dev/null | cut -d= -f2-); \
 	DB=$$(grep ^MONGO_DB= .env 2>/dev/null | cut -d= -f2-); \
 	echo ""; \
-	echo "In-cluster DSN (for Unpod .env.prod):"; \
-	echo "  MONGO_DB=$${DB}"; \
-	echo "  MONGO_DSN=mongodb://$${USER}:$${PASS}@mongo.$(NAMESPACE).svc.cluster.local:27017/$${DB}?authSource=admin"
+	echo "In-cluster DSN (for librechat/.env):"; \
+	echo "  MONGO_URI=mongodb://$${USER}:$${PASS}@mongo.$(NAMESPACE).svc.cluster.local:27017/LibreChat?authSource=admin"

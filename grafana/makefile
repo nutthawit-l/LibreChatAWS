@@ -27,7 +27,7 @@ help:
 	@echo "  values      Render values.yaml.tpl → .values.generated.yaml"
 	@echo "  deploy      Install/upgrade k8s-monitoring → Grafana Cloud"
 	@echo "  status      Show Alloy / kube-state-metrics / node-exporter pods"
-	@echo "  endpoints   Print in-cluster OTLP URLs for Unpod"
+	@echo "  endpoints   Print in-cluster OTLP URLs for LibreChat"
 	@echo "  logs        Tail Alloy metrics collector logs"
 	@echo "  destroy     Uninstall Helm release + delete namespace"
 	@echo ""
@@ -47,6 +47,10 @@ check:
 	@command -v kubectl >/dev/null || (echo "Missing kubectl" && exit 1)
 	@command -v envsubst >/dev/null || (echo "Missing envsubst (gettext)" && exit 1)
 	@kubectl config current-context
+	@kubectl get --raw=/readyz >/dev/null 2>&1 \
+		|| (echo "Cannot reach EKS API (timeout / connection lost)."; \
+		    echo "Try: aws eks update-kubeconfig --name $(CLUSTER_NAME) --region us-east-1"; \
+		    echo "Then: kubectl get ns"; exit 1)
 	@TOK=$$(grep ^GRAFANA_CLOUD_TOKEN= .env | cut -d= -f2-); \
 	if [ -z "$$TOK" ] || echo "$$TOK" | grep -Eq '^(glc_x+|change-me)'; then \
 		echo "Set a real GRAFANA_CLOUD_TOKEN in .env"; exit 1; \
@@ -61,12 +65,13 @@ repo:
 .PHONY: secrets
 secrets: check
 	kubectl get ns $(NAMESPACE) >/dev/null 2>&1 || kubectl create namespace $(NAMESPACE)
+	# --validate=false avoids OpenAPI download timeouts on flaky EKS API links
 	kubectl -n $(NAMESPACE) create secret generic grafana-cloud \
 		--from-literal=token="$$(grep ^GRAFANA_CLOUD_TOKEN= .env | cut -d= -f2-)" \
 		--from-literal=metrics-user="$$(grep ^GRAFANA_CLOUD_METRICS_USER= .env | cut -d= -f2-)" \
 		--from-literal=logs-user="$$(grep ^GRAFANA_CLOUD_LOGS_USER= .env | cut -d= -f2-)" \
 		--from-literal=otlp-user="$$(grep ^GRAFANA_CLOUD_OTLP_INSTANCE_ID= .env | cut -d= -f2-)" \
-		--dry-run=client -o yaml | kubectl apply -f -
+		--dry-run=client -o yaml | kubectl apply --validate=false -f -
 	@echo "Secret grafana-cloud applied in ns/$(NAMESPACE)"
 
 .PHONY: values
@@ -103,7 +108,7 @@ endpoints:
 	@echo ""
 	@echo "Grafana Cloud cluster label: $(CLUSTER_NAME)"
 	@echo ""
-	@echo "In-cluster OTLP (for Unpod / apps in any namespace):"
+	@echo "In-cluster OTLP (for LibreChat / apps in any namespace):"
 	@OTLP_SVC=$$(kubectl -n $(NAMESPACE) get svc -o name 2>/dev/null | grep -E 'alloy-receiver|receiver' | head -1 | sed 's|^service/||'); \
 	if [ -n "$$OTLP_SVC" ]; then \
 		echo "  OTEL_EXPORTER_OTLP_ENDPOINT=http://$${OTLP_SVC}.$(NAMESPACE).svc.cluster.local:4318"; \
@@ -114,7 +119,7 @@ endpoints:
 		echo "  Expected pattern: http://$(RELEASE)-alloy-receiver.$(NAMESPACE).svc.cluster.local:4318"; \
 	fi
 	@echo ""
-	@echo "Prometheus scrape annotations (optional on Unpod pods/services):"
+	@echo "Prometheus scrape annotations (optional on LibreChat pods/services):"
 	@echo "  prometheus.io/scrape: \"true\""
 	@echo "  prometheus.io/port: \"<metrics-port>\""
 	@echo "  prometheus.io/path: \"/metrics\""

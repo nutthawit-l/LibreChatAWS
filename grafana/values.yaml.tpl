@@ -56,7 +56,7 @@ clusterEvents:
   enabled: true
   collector: alloy-singleton
 
-# Pod stdout/stderr → Loki (unpod, postgres, redis, mongo, …)
+# Pod stdout/stderr → Loki (librechat, postgres, redis, mongo, …)
 podLogsViaLoki:
   enabled: true
   collector: alloy-logs
@@ -66,7 +66,7 @@ annotationAutodiscovery:
   enabled: true
   collector: alloy-metrics
 
-# In-cluster OTLP receiver for Unpod / other apps
+# In-cluster OTLP receiver for LibreChat / other apps
 applicationObservability:
   enabled: true
   collector: alloy-receiver
@@ -86,6 +86,15 @@ telemetryServices:
     deploy: true
   node-exporter:
     deploy: true
+    # Skip eksctl System-NodeGroup (t4g.small) — only ~11 pods/node; DaemonSets fill them.
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: role
+                  operator: NotIn
+                  values: [system]
   kepler:
     deploy: false
   opencost:
@@ -96,6 +105,15 @@ collectors:
     presets: [clustered, statefulset]
   alloy-logs:
     presets: [filesystem-log-reader, daemonset]
+    # DaemonSet needs 1 pod per node; system t4g.small hits "Too many pods" quickly.
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: role
+                  operator: NotIn
+                  values: [system]
   alloy-singleton:
     presets: [singleton]
   alloy-receiver:

@@ -1,5 +1,5 @@
 REGION ?= us-east-1
-BUCKET_NAME ?= unpod-media-core-cluster
+BUCKET_NAME ?= librechat-media-core-cluster
 # Optional override via .env (BUCKET_NAME=..., REGION=...)
 -include .env
 export
@@ -8,15 +8,15 @@ export
 
 .PHONY: help
 help:
-	@echo "S3 bucket for Unpod media (PoC)"
+	@echo "S3 bucket for LibreChat media (PoC)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  check     Verify AWS identity"
 	@echo "  create    Create encrypted private bucket + CORS"
-	@echo "  create-user  Create IAM user + access keys → unpod/.env"
+	@echo "  create-user  Create IAM user + access keys → librechat/.env"
 	@echo "  status    Show bucket info"
 	@echo "  destroy   Empty and delete bucket (destructive)"
-	@echo "  conninfo  Print values for unpod/.env"
+	@echo "  conninfo  Print values for librechat/.env"
 	@echo ""
 	@echo "Variables:"
 	@echo "  BUCKET_NAME=$(BUCKET_NAME)"
@@ -58,14 +58,14 @@ create: check
 	aws s3api put-bucket-ownership-controls \
 		--bucket "$(BUCKET_NAME)" \
 		--ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerEnforced}]'
-	@echo "CORS (app + API hosts)..."
+	@echo "CORS (LibreChat host)..."
 	aws s3api put-bucket-cors \
 		--bucket "$(BUCKET_NAME)" \
 		--cors-configuration file://cors.json
 	@echo "Tags..."
 	aws s3api put-bucket-tagging \
 		--bucket "$(BUCKET_NAME)" \
-		--tagging 'TagSet=[{Key=Project,Value=unpod},{Key=Environment,Value=poc},{Key=ManagedBy,Value=makefile}]'
+		--tagging 'TagSet=[{Key=Project,Value=librechat},{Key=Environment,Value=poc},{Key=ManagedBy,Value=makefile}]'
 	@echo ""
 	@echo "Created s3://$(BUCKET_NAME)"
 	@$(MAKE) --no-print-directory conninfo
@@ -99,12 +99,11 @@ destroy: check
 .PHONY: conninfo
 conninfo:
 	@echo ""
-	@echo "Add to unpod/.env:"
-	@echo "  AWS_STORAGE_BUCKET_NAME=$(BUCKET_NAME)"
-	@echo "  AWS_S3_REGION_NAME=$(REGION)"
+	@echo "Add to librechat/.env:"
+	@echo "  AWS_BUCKET_NAME=$(BUCKET_NAME)"
+	@echo "  AWS_REGION=$(REGION)"
 	@echo "  AWS_ACCESS_KEY_ID=<iam-user-or-role-key>"
 	@echo "  AWS_SECRET_ACCESS_KEY=<iam-secret>"
 	@echo ""
 	@echo "Bucket URL: https://$(BUCKET_NAME).s3.$(REGION).amazonaws.com"
-	@echo "PoC tip: create an IAM user with AmazonS3FullAccess on this bucket only,"
-	@echo "         or use IRSA / Pod Identity on the Unpod service account later."
+	@echo "PoC tip: make create-user writes keys into librechat/.env"

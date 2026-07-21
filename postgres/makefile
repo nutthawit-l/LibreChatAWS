@@ -1,7 +1,7 @@
 NAMESPACE ?= postgres
 STORAGE_CLASS ?= gp3
 STORAGE_SIZE ?= 10Gi
-IMAGE ?= postgres:16-alpine
+IMAGE ?= pgvector/pgvector:pg16
 
 .DEFAULT_GOAL := help
 
@@ -81,8 +81,9 @@ destroy:
 .PHONY: conninfo
 conninfo:
 	@echo ""
-	@echo "In-cluster DSN (for Unpod .env.prod):"
+	@echo "In-cluster DSN (for librechat/.env RAG):"
 	@echo "  POSTGRES_HOST=postgres.$(NAMESPACE).svc.cluster.local"
 	@echo "  POSTGRES_PORT=5432"
-	@echo "  POSTGRES_DB=$$(grep ^POSTGRES_DB= .env 2>/dev/null | cut -d= -f2- || echo unpod_db)"
-	@echo "  POSTGRES_USER=$$(grep ^POSTGRES_USER= .env 2>/dev/null | cut -d= -f2- || echo unpod)"
+	@echo "  POSTGRES_DB=librechat_vectordb   # created by: make -C ../librechat init-postgres"
+	@echo "  POSTGRES_USER=$$(grep ^POSTGRES_USER= .env 2>/dev/null | cut -d= -f2- || echo librechat)"
+	@echo "  POSTGRES_PASSWORD=$$(grep ^POSTGRES_PASSWORD= .env 2>/dev/null | cut -d= -f2-)"

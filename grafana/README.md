@@ -4,7 +4,7 @@ Ship cluster metrics, pod logs, events, and optional app OTLP telemetry from thi
 EKS stack to **Grafana Cloud** via the official [`k8s-monitoring`](https://github.com/grafana/k8s-monitoring-helm)
 Helm chart (Grafana Alloy collectors).
 
-Integrates with namespaces already used by this repo: `unpod`, `postgres`, `redis`, `mongo`.
+Integrates with namespaces already used by this repo: `librechat`, `postgres`, `redis`, `mongo`.
 
 ## Prerequisites
 
@@ -136,11 +136,11 @@ In Grafana Cloud:
 
 Cost (OpenCost) and energy (Kepler) collectors stay **off** for PoC.
 
-## Integrate with Unpod
+## Integrate with LibreChat
 
 ### Logs & cluster metrics (automatic)
 
-After `make deploy`, Alloy scrapes the whole cluster. Unpod / DB pod logs appear in Loki under `cluster="core-cluster"` and `namespace="unpod"` (etc.).
+After `make deploy`, Alloy scrapes the whole cluster. LibreChat / DB pod logs appear in Loki under `cluster="core-cluster"` and `namespace="librechat"` (etc.).
 
 ### App metrics via annotations (optional)
 
@@ -150,21 +150,21 @@ If a service exposes Prometheus metrics, annotate the Pod or Service:
 metadata:
   annotations:
     prometheus.io/scrape: "true"
-    prometheus.io/port: "9116"
+    prometheus.io/port: "3080"
     prometheus.io/path: "/metrics"
 ```
 
 `annotationAutodiscovery` will pick them up without chart changes.
 
-### Traces / OTLP from Unpod
+### Traces / OTLP from LibreChat
 
 Point apps at the in-cluster receiver (from `make endpoints`):
 
 ```bash
-# Example — add to unpod/.env after deploy
+# Example — optional app OTLP (if LibreChat / sidecars emit OTLP)
 OTEL_EXPORTER_OTLP_ENDPOINT=http://grafana-k8s-monitoring-alloy-receiver.grafana.svc.cluster.local:4318
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-OTEL_SERVICE_NAME=unpod
+OTEL_SERVICE_NAME=librechat
 ```
 
 Exact Service name can differ slightly by chart version; always prefer `make endpoints`.
@@ -179,7 +179,7 @@ Exact Service name can differ slightly by chart version; always prefer `make end
 | `values` | Render `values.yaml.tpl` |
 | `deploy` | Helm upgrade `--install` |
 | `status` | Pods / services / release |
-| `endpoints` | Print OTLP URLs for Unpod |
+| `endpoints` | Print OTLP URLs for LibreChat |
 | `logs` | Tail Alloy metrics logs |
 | `destroy` | Uninstall release + delete namespace |
 
@@ -198,4 +198,32 @@ grafana/
 - Do not commit `.env` or `.values.generated.yaml` (gitignored).
 - Token is also written into the rendered values file under `/tmp`-style path in-repo (`.values.generated.yaml`); keep it local.
 - Chart pin: `CHART_VERSION` in the makefile (default `4.3.0`). Override with `make deploy CHART_VERSION=4.2.2`.
-- To tear down only observability: `make destroy` (does not touch Unpod / DBs).
+- To tear down only observability: `make destroy` (does not touch LibreChat / DBs).
+- Alloy logs + node-exporter DaemonSets **skip** nodes labeled `role=system` (eksctl `t4g.small`) to avoid `Too many pods`.
+
+## Troubleshooting
+
+### `FailedScheduling` / `Too many pods` on `alloy-logs-*`
+
+`alloy-logs` is a **DaemonSet** (one Pod per Node). Small instances run out of pod slots fast:
+
+| Node | Typical `allocatable.pods` |
+|------|----------------------------|
+| `t4g.small` (System-NodeGroup) | ~11 |
+| `c7a.medium` | ~8 |
+| `c7a.large`+ | ~17+ |
+
+**Fix already in this repo:**
+
+1. DaemonSets exclude `role=system` (see `values.yaml.tpl`).
+2. Karpenter `core-pool` excludes `nano`/`micro`/`small`/`medium` — re-apply with:
+   `make -C ../eks install-karpenter-config`
+
+Then redeploy Grafana:
+
+```bash
+make deploy
+kubectl -n grafana get pods -o wide
+```
+
+If Pending remains on Karpenter nodes, check density: `kubectl describe node <name> | grep -A5 Allocatable` and wait for Karpenter to replace mediums with larger sizes.

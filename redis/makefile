@@ -80,6 +80,5 @@ destroy:
 conninfo:
 	@PASS=$$(grep ^REDIS_PASSWORD= .env 2>/dev/null | cut -d= -f2-); \
 	echo ""; \
-	echo "In-cluster URL (for Unpod .env.prod):"; \
-	echo "  REDIS_URL=redis://:$${PASS}@redis.$(NAMESPACE).svc.cluster.local:6379/0"; \
+	echo "In-cluster URL (for librechat/.env):"; \
 	echo "  REDIS_URI=redis://:$${PASS}@redis.$(NAMESPACE).svc.cluster.local:6379/0"
