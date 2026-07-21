@@ -20,6 +20,13 @@ SECRET_ENV := $(CACHE_DIR)/credentials.env
 -include .env
 export
 
+# S3 keys in .env are for the LibreChat app only. If exported, they override host
+# AWS CLI credentials and break kubectl EKS token auth (aws-iam-authenticator).
+S3_AWS_ACCESS_KEY_ID := $(AWS_ACCESS_KEY_ID)
+S3_AWS_SECRET_ACCESS_KEY := $(AWS_SECRET_ACCESS_KEY)
+unexport AWS_ACCESS_KEY_ID
+unexport AWS_SECRET_ACCESS_KEY
+
 DOMAIN := $(or $(DOMAIN),librechat.ntwtech.com)
 DOMAIN_CLIENT := $(or $(DOMAIN_CLIENT),https://$(DOMAIN))
 DOMAIN_SERVER := $(or $(DOMAIN_SERVER),https://$(DOMAIN))
@@ -99,8 +106,8 @@ secrets: check
 		echo "JWT_SECRET=$(JWT_SECRET)"; \
 		echo "JWT_REFRESH_SECRET=$(JWT_REFRESH_SECRET)"; \
 		echo "MEILI_MASTER_KEY=$(MEILI_MASTER_KEY)"; \
-		echo "AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID)"; \
-		echo "AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY)"; \
+		echo "AWS_ACCESS_KEY_ID=$(S3_AWS_ACCESS_KEY_ID)"; \
+		echo "AWS_SECRET_ACCESS_KEY=$(S3_AWS_SECRET_ACCESS_KEY)"; \
 		echo "AWS_REGION=$(AWS_REGION)"; \
 		echo "AWS_BUCKET_NAME=$(AWS_BUCKET_NAME)"; \
 		echo "OPENAI_API_KEY=$(OPENAI_API_KEY)"; \
