@@ -28,15 +28,15 @@ spec:
           operator: In
           values: ["linux"]
 
-  # Taints เพื่อให้เฉพาะ Pod ที่ต้องการ GPU เท่านั้นขึ้นมา
-  taints:
-    - key: nvidia.com/gpu
-      value: "true"
-      effect: NoSchedule
+      # Karpenter v1: taints live under template.spec (not spec.taints)
+      taints:
+        - key: nvidia.com/gpu
+          value: "true"
+          effect: NoSchedule
 
   limits:
     cpu: 200
 
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 5m   # GPU อย่า consolidate บ่อย
+    consolidateAfter: 5m

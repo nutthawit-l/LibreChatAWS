@@ -26,7 +26,7 @@ spec:
               exec redis-server
               --appendonly yes
               --requirepass "$REDIS_PASSWORD"
-              --maxmemory 256mb
+              --maxmemory 64mb
               --maxmemory-policy allkeys-lru
           ports:
             - name: redis
@@ -49,11 +49,11 @@ spec:
             periodSeconds: 20
           resources:
             requests:
-              cpu: "100m"
-              memory: 256Mi
+              cpu: "50m"
+              memory: 64Mi
             limits:
-              cpu: "500m"
-              memory: 512Mi
+              cpu: "250m"
+              memory: 128Mi
           volumeMounts:
             - name: data
               mountPath: /data

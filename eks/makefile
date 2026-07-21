@@ -127,6 +127,7 @@ install-karpenter-config:
 	kubectl apply -f karpenter/nodepool-core.yaml
 	kubectl apply -f karpenter/nodepool-gpu.yaml
 	@echo "Applied NodeClasses (default + gpu) and NodePools"
+	@kubectl get ec2nodeclass,nodepool
 
 .PHONY: install-ebs-csi
 install-ebs-csi: check

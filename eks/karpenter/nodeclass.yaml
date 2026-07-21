@@ -3,17 +3,26 @@ kind: EC2NodeClass
 metadata:
   name: default
 spec:
-  amiFamily: AL2023
+  # Required in Karpenter v1 — amiFamily is implied by the alias
+  amiSelectorTerms:
+    - alias: al2023@latest
   role: "KarpenterNodeRole-core-cluster"
-  
+
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "core-cluster"   # ต้องตรงกับ cluster tag
-  
+        karpenter.sh/discovery: "core-cluster"
+
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: "core-cluster"
 
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 40Gi
+        volumeType: gp3
+        encrypted: true
+
   tags:
     Environment: production
-    Team: ai       
+    Team: ai
