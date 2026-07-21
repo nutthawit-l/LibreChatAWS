@@ -35,3 +35,6 @@ managedNodeGroups:
       role: system
 addons:
   - name: eks-pod-identity-agent
+  - name: aws-ebs-csi-driver
+    wellKnownPolicies:
+      ebsCSIController: true

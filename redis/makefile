@@ -1,5 +1,5 @@
 NAMESPACE ?= redis
-STORAGE_CLASS ?= gp2
+STORAGE_CLASS ?= gp3
 STORAGE_SIZE ?= 5Gi
 IMAGE ?= redis:7-alpine
 

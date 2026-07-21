@@ -1,5 +1,5 @@
 NAMESPACE ?= mongo
-STORAGE_CLASS ?= gp2
+STORAGE_CLASS ?= gp3
 STORAGE_SIZE ?= 10Gi
 IMAGE ?= mongo:7
 

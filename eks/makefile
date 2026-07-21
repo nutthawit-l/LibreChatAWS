@@ -21,6 +21,7 @@ help:
 	@echo "  wire-karpenter-iam       Configure pod identity and node IAM mapping"
 	@echo "  install-karpenter        Install/upgrade Karpenter via Helm"
 	@echo "  install-karpenter-config Apply NodeClass and NodePool manifests"
+	@echo "  install-ebs-csi          Install EBS CSI addon + gp3 StorageClass"
 	@echo "  setup                    Full bootstrap: roles, cluster, Karpenter"
 	@echo "  destroy                  Delete EKS cluster and Karpenter CFN stack"
 	@echo "  unpod-help               Show Unpod deploy targets (../unpod)"
@@ -127,8 +128,18 @@ install-karpenter-config:
 	kubectl apply -f karpenter/nodepool-gpu.yaml
 	@echo "Applied NodeClasses (default + gpu) and NodePools"
 
+.PHONY: install-ebs-csi
+install-ebs-csi: check
+	@echo "Installing aws-ebs-csi-driver addon (required for PVC / StatefulSets)..."
+	eksctl create addon --name aws-ebs-csi-driver \
+		--cluster $(CLUSTER_NAME) \
+		--region $(REGION) \
+		--force || true
+	kubectl apply -f storage/gp3.yaml
+	@echo "EBS CSI + gp3 StorageClass ready. Verify: kubectl get sc; kubectl -n kube-system get pods -l app.kubernetes.io/name=aws-ebs-csi-driver"
+
 .PHONY: setup
-setup: create-roles create-cluster install-karpenter install-karpenter-config
+setup: create-roles create-cluster install-karpenter install-karpenter-config install-ebs-csi
 	@echo "Setup complete"
 	@echo "Run: aws eks update-kubeconfig --name $(CLUSTER_NAME) --region $(REGION)"
 
