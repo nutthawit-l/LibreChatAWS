@@ -1,0 +1,3 @@
+.cache/
+.env.prod
+k8s/base/ingress.yaml

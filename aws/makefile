@@ -23,6 +23,7 @@ help:
 	@echo "  install-karpenter-config Apply NodeClass and NodePool manifests"
 	@echo "  setup                    Full bootstrap: roles, cluster, Karpenter"
 	@echo "  destroy                  Delete EKS cluster and Karpenter CFN stack"
+	@echo "  unpod-help               Show Unpod deploy targets (aws/unpod)"
 	@echo ""
 	@echo "Variables (override with VAR=value):"
 	@echo "  CLUSTER_NAME=$(CLUSTER_NAME)"
@@ -33,6 +34,11 @@ help:
 	@echo ""
 	@echo "Example:"
 	@echo "  make update-cluster-version K8S_VERSION=1.31"
+	@echo "  make -C unpod build-push && make -C unpod deploy DOMAIN=example.com"
+
+.PHONY: unpod-help
+unpod-help:
+	@$(MAKE) -C unpod help
 
 .PHONY: check
 check:
@@ -116,8 +122,10 @@ install-karpenter: wire-karpenter-iam
 .PHONY: install-karpenter-config
 install-karpenter-config:
 	kubectl apply -f karpenter/nodeclass.yaml
+	kubectl apply -f karpenter/nodeclass-gpu.yaml
 	kubectl apply -f karpenter/nodepool-core.yaml
 	kubectl apply -f karpenter/nodepool-gpu.yaml
+	@echo "Applied NodeClasses (default + gpu) and NodePools"
 
 .PHONY: setup
 setup: create-roles create-cluster install-karpenter install-karpenter-config

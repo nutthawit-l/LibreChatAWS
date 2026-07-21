@@ -1,0 +1,30 @@
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: gpu
+spec:
+  # Karpenter picks the AL2023 NVIDIA accelerated AMI when pods request nvidia.com/gpu
+  amiSelectorTerms:
+    - alias: al2023@latest
+  role: "KarpenterNodeRole-core-cluster"
+
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "core-cluster"
+
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "core-cluster"
+
+  # Model weights + container layers need disk
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 100Gi
+        volumeType: gp3
+        encrypted: true
+
+  tags:
+    Environment: production
+    Team: ai
+    Workload: gpu

@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+    app.kubernetes.io/part-of: unpod
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: unpod-web:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: appType
+              value: "social"
+            - name: isDevMode
+              value: "no"
+            - name: noIndex
+              value: "yes"
+            - name: noFollow
+              value: "yes"
+            - name: productId
+              value: "unpod.ai"
+            - name: currency
+              value: "USD"
+            - name: ENABLE_CHECKSUM
+              value: "false"
+            - name: apiUrl
+              valueFrom:
+                secretKeyRef:
+                  name: unpod-secrets
+                  key: PUBLIC_API_URL
+            - name: serverApiUrl
+              value: "http://backend-core:8000/api/v1/"
+            - name: chatApiUrl
+              valueFrom:
+                secretKeyRef:
+                  name: unpod-secrets
+                  key: PUBLIC_CHAT_WS_URL
+            - name: siteUrl
+              valueFrom:
+                secretKeyRef:
+                  name: unpod-secrets
+                  key: PUBLIC_SITE_URL
+            - name: LIVEKIT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: unpod-secrets
+                  key: LIVEKIT_URL
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: unpod-secrets
+                  key: LIVEKIT_API_KEY
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: unpod-secrets
+                  key: LIVEKIT_API_SECRET
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "250m"
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
