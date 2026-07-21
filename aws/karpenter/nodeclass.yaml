@@ -1,0 +1,19 @@
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2023
+  role: "KarpenterNodeRole-core-cluster"
+  
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "core-cluster"   # ต้องตรงกับ cluster tag
+  
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "core-cluster"
+
+  tags:
+    Environment: production
+    Team: ai       

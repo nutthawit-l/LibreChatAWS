@@ -1,0 +1,37 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: core-cluster
+  region: us-east-1
+  version: "1.30"
+  tags:
+    karpenter.sh/discovery: core-cluster
+iam:
+  withOIDC: true
+  podIdentityAssociations:
+    - namespace: kube-system
+      serviceAccountName: karpenter
+      roleName: core-cluster-karpenter
+      permissionPolicyARNs:
+        - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/KarpenterControllerNodeLifecyclePolicy-core-cluster
+        - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/KarpenterControllerIAMIntegrationPolicy-core-cluster
+        - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/KarpenterControllerEKSIntegrationPolicy-core-cluster
+        - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/KarpenterControllerInterruptionPolicy-core-cluster
+        - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/KarpenterControllerResourceDiscoveryPolicy-core-cluster
+        - arn:aws:iam::${AWS_ACCOUNT_ID}:policy/KarpenterControllerZonalShiftPolicy-core-cluster
+iamIdentityMappings:
+  - arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/KarpenterNodeRole-core-cluster
+    username: system:node:{{EC2PrivateDNSName}}
+    groups:
+      - system:bootstrappers
+      - system:nodes
+managedNodeGroups:
+  - name: System-NodeGroup
+    instanceType: t4g.small
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 3
+    labels:
+      role: system
+addons:
+  - name: eks-pod-identity-agent
