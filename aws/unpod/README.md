@@ -14,6 +14,11 @@ Optional: self-hosted LLM via vLLM on `gpu-pool`.
   - ElastiCache Redis
   - DocumentDB or MongoDB Atlas
   - S3 bucket for media
+- **PoC alternative:** self-host DBs on EKS:
+  - `make -C postgres deploy`
+  - `make -C redis deploy`
+  - `make -C mongo deploy`
+  Then copy connection strings from each `make conninfo` into `aws/unpod/.env.prod`
 - LiveKit Cloud (or self-hosted) + STT/TTS API keys
 - For self-hosted LLM: GPU NodeClass + NVIDIA device plugin (see below)
 
