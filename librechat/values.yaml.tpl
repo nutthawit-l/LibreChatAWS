@@ -20,26 +20,10 @@ meilisearch:
   auth:
     existingMasterKeySecret: "librechat-credentials-env"
 
+# RAG needs an embeddings provider; Groq has no embeddings API.
+# Re-enable when wiring another embed backend (e.g. OpenAI / local).
 librechat-rag-api:
-  enabled: true
-  embeddingsProvider: ollama
-  postgresql:
-    enabled: false
-    auth:
-      database: "${POSTGRES_DB}"
-      username: "${POSTGRES_USER}"
-      existingSecret: "librechat-vectordb"
-      secretKeys:
-        userPasswordKey: postgres-password
-        adminPasswordKey: postgres-password
-        replicationPasswordKey: postgres-password
-  rag:
-    configEnv:
-      DB_PORT: "${POSTGRES_PORT}"
-      DB_HOST: "${POSTGRES_HOST}"
-      EMBEDDINGS_PROVIDER: ollama
-      OLLAMA_BASE_URL: "${OLLAMA_URL}"
-      EMBEDDINGS_MODEL: "${OLLAMA_EMBED_MODEL}"
+  enabled: false
 
 librechat:
   existingSecretName: "librechat-credentials-env"
@@ -67,18 +51,20 @@ librechat:
     fileStrategy: "s3"
     endpoints:
       custom:
-        - name: "Ollama"
-          apiKey: "ollama"
-          baseURL: "${OLLAMA_URL}/v1/"
+        - name: "Groq"
+          apiKey: "${GROQ_API_KEY}"
+          baseURL: "https://api.groq.com/openai/v1/"
           models:
             default:
-              - "${OLLAMA_MODEL}"
-            fetch: true
+              - "${GROQ_MODEL}"
+              - "llama-3.1-8b-instant"
+              - "gemma2-9b-it"
+            fetch: false
           titleConvo: true
           titleModel: "current_model"
           summarize: false
           summaryModel: "current_model"
-          modelDisplayLabel: "Ollama"
+          modelDisplayLabel: "Groq"
 
 ingress:
   enabled: true

@@ -6,9 +6,8 @@ CHART ?= oci://ghcr.io/danny-avila/librechat-chart/librechat
 # Pin when known; empty = latest chart from OCI
 CHART_VERSION ?=
 NVIDIA_DEVICE_PLUGIN_VERSION ?= v0.17.1
-OLLAMA_MODEL ?= llama3.2
-OLLAMA_EMBED_MODEL ?= nomic-embed-text
-OPENAI_API_KEY ?= ollama
+GROQ_MODEL ?= llama-3.3-70b-versatile
+OPENAI_API_KEY ?=
 
 DOMAIN ?= librechat.ntwtech.com
 ACM_CERTIFICATE_ARN ?= $(shell sed -n 's/^ACM_CERTIFICATE_ARN=//p' ../ingress/.env 2>/dev/null)
@@ -30,9 +29,7 @@ unexport AWS_SECRET_ACCESS_KEY
 DOMAIN := $(or $(DOMAIN),librechat.ntwtech.com)
 DOMAIN_CLIENT := $(or $(DOMAIN_CLIENT),https://$(DOMAIN))
 DOMAIN_SERVER := $(or $(DOMAIN_SERVER),https://$(DOMAIN))
-OLLAMA_URL := $(or $(OLLAMA_URL),http://ollama.$(NAMESPACE).svc.cluster.local:11434)
-OLLAMA_MODEL := $(or $(OLLAMA_MODEL),llama3.2)
-OLLAMA_EMBED_MODEL := $(or $(OLLAMA_EMBED_MODEL),nomic-embed-text)
+GROQ_MODEL := $(or $(GROQ_MODEL),llama-3.3-70b-versatile)
 ALLOW_REGISTRATION := $(or $(ALLOW_REGISTRATION),true)
 ALLOW_EMAIL_LOGIN := $(or $(ALLOW_EMAIL_LOGIN),true)
 AWS_REGION := $(or $(AWS_REGION),$(REGION))
@@ -45,32 +42,31 @@ POSTGRES_USER := $(or $(POSTGRES_USER),librechat)
 
 .PHONY: help
 help:
-	@echo "LibreChat + Ollama on EKS ($(CLUSTER_NAME))"
+	@echo "LibreChat + Groq on EKS ($(CLUSTER_NAME))"
 	@echo ""
 	@echo "Targets:"
 	@echo "  check              Verify tools / kube context / .env"
 	@echo "  gen-secrets        Fill empty CREDS_* / JWT_* / MEILI_* in .env"
 	@echo "  secrets            Apply K8s secrets from .env"
-	@echo "  init-postgres      Create RAG DB + pgvector extension on shared Postgres"
-	@echo "  install-gpu-plugin NVIDIA device plugin DaemonSet"
-	@echo "  deploy-ollama      Namespace + Ollama (gpu-pool) + pull models"
+	@echo "  init-postgres      Create RAG DB + pgvector (optional; RAG API off with Groq)"
 	@echo "  values             Render values.yaml.tpl → .cache/values.yaml"
 	@echo "  deploy             Helm install/upgrade LibreChat"
 	@echo "  status             Pods / svc / ingress"
 	@echo "  endpoints          ALB hostname + DNS hint"
+	@echo "  destroy-ollama     Remove in-cluster Ollama (no longer required)"
 	@echo "  destroy            Uninstall Helm + delete namespace librechat"
 	@echo "  destroy-unpod      Delete legacy unpod namespace (migration)"
 	@echo ""
-	@echo "Prereq: ingress, mongo, redis, postgres (pgvector image), s3"
+	@echo "Prereq: ingress, mongo, redis, s3; GROQ_API_KEY in .env"
 	@echo "Usage:"
 	@echo "  cp .env.example .env && make gen-secrets"
-	@echo "  # copy MONGO_URI / REDIS_URI / POSTGRES_* / AWS_* from conninfo"
-	@echo "  make deploy-ollama && make secrets && make init-postgres && make deploy"
+	@echo "  # set GROQ_API_KEY=... (and OPENAI_API_KEY= same value)"
+	@echo "  make secrets && make deploy"
 	@echo ""
 	@echo "Variables:"
 	@echo "  DOMAIN=$(DOMAIN)  NAMESPACE=$(NAMESPACE)  RELEASE=$(RELEASE)"
 	@echo "  ACM_CERTIFICATE_ARN=$(ACM_CERTIFICATE_ARN)"
-	@echo "  OLLAMA_MODEL=$(OLLAMA_MODEL)  OLLAMA_EMBED_MODEL=$(OLLAMA_EMBED_MODEL)"
+	@echo "  GROQ_MODEL=$(GROQ_MODEL)"
 
 .PHONY: check
 check:
@@ -87,7 +83,8 @@ check:
 	@test -n "$(REDIS_URI)" || (echo "REDIS_URI empty in .env" && exit 1)
 	@test -n "$(CREDS_KEY)" || (echo "CREDS_KEY empty — run make gen-secrets" && exit 1)
 	@test -n "$(JWT_SECRET)" || (echo "JWT_SECRET empty — run make gen-secrets" && exit 1)
-	@echo "Domain: $(DOMAIN) | Namespace: $(NAMESPACE)"
+	@test -n "$(GROQ_API_KEY)" || (echo "GROQ_API_KEY empty — set in .env (https://console.groq.com/keys)" && exit 1)
+	@echo "Domain: $(DOMAIN) | Namespace: $(NAMESPACE) | Model: $(GROQ_MODEL)"
 
 .PHONY: gen-secrets
 gen-secrets:
@@ -110,7 +107,8 @@ secrets: check
 		echo "AWS_SECRET_ACCESS_KEY=$(S3_AWS_SECRET_ACCESS_KEY)"; \
 		echo "AWS_REGION=$(AWS_REGION)"; \
 		echo "AWS_BUCKET_NAME=$(AWS_BUCKET_NAME)"; \
-		echo "OPENAI_API_KEY=$(OPENAI_API_KEY)"; \
+		echo "GROQ_API_KEY=$(GROQ_API_KEY)"; \
+		echo "OPENAI_API_KEY=$(or $(OPENAI_API_KEY),$(GROQ_API_KEY))"; \
 	} > "$(SECRET_ENV)"
 	kubectl -n $(NAMESPACE) create secret generic librechat-credentials-env \
 		--from-env-file="$(SECRET_ENV)" \
@@ -142,23 +140,10 @@ init-postgres: check
 	@echo "Postgres RAG DB ready: $(POSTGRES_DB)"
 	@echo "Note: POSTGRES_USER in librechat/.env must match the Postgres role (see ../postgres/.env)."
 
-.PHONY: install-gpu-plugin
-install-gpu-plugin:
-	@echo "Installing NVIDIA device plugin $(NVIDIA_DEVICE_PLUGIN_VERSION)..."
-	kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/$(NVIDIA_DEVICE_PLUGIN_VERSION)/deployments/static/nvidia-device-plugin.yml
-	@echo "Ensure gpu NodeClass/NodePool: make -C ../eks install-karpenter-config"
-
-.PHONY: deploy-ollama
-deploy-ollama:
-	kubectl apply -f k8s/ollama/namespace.yaml
-	kubectl apply -f k8s/ollama/ollama.yaml
-	@echo "Waiting for Ollama (GPU node may take several minutes)..."
-	kubectl -n $(NAMESPACE) rollout status deploy/ollama --timeout=20m
-	@echo "Pulling chat model $(OLLAMA_MODEL)..."
-	kubectl -n $(NAMESPACE) exec deploy/ollama -- ollama pull $(OLLAMA_MODEL)
-	@echo "Pulling embed model $(OLLAMA_EMBED_MODEL)..."
-	kubectl -n $(NAMESPACE) exec deploy/ollama -- ollama pull $(OLLAMA_EMBED_MODEL)
-	@echo "Ollama ready at $(OLLAMA_URL)"
+.PHONY: destroy-ollama
+destroy-ollama:
+	kubectl -n $(NAMESPACE) delete deploy,svc,pvc -l app=ollama --ignore-not-found
+	@echo "Removed Ollama workloads (GPU NodeClaims can consolidate away)."
 
 .PHONY: values
 values: check
@@ -173,12 +158,14 @@ values: check
 		AWS_REGION="$(AWS_REGION)" AWS_BUCKET_NAME="$(AWS_BUCKET_NAME)" \
 		POSTGRES_HOST="$(POSTGRES_HOST)" POSTGRES_PORT="$(POSTGRES_PORT)" \
 		POSTGRES_DB="$(POSTGRES_DB)" POSTGRES_USER="$(POSTGRES_USER)" \
-		OLLAMA_URL="$(OLLAMA_URL)" OLLAMA_MODEL="$(OLLAMA_MODEL)" OLLAMA_EMBED_MODEL="$(OLLAMA_EMBED_MODEL)" \
+		GROQ_MODEL="$(GROQ_MODEL)" \
 		ALLOW_REGISTRATION="$(ALLOW_REGISTRATION)" ALLOW_EMAIL_LOGIN="$(ALLOW_EMAIL_LOGIN)" \
 		ACM_CERT_ANNOTATION="$$ACM_CERT_ANNOTATION"; \
-	envsubst '$${DOMAIN} $${DOMAIN_CLIENT} $${DOMAIN_SERVER} $${MONGO_URI} $${REDIS_URI} $${AWS_REGION} $${AWS_BUCKET_NAME} $${POSTGRES_HOST} $${POSTGRES_PORT} $${POSTGRES_DB} $${POSTGRES_USER} $${OLLAMA_URL} $${OLLAMA_MODEL} $${OLLAMA_EMBED_MODEL} $${ALLOW_REGISTRATION} $${ALLOW_EMAIL_LOGIN} $${ACM_CERT_ANNOTATION}' \
+	envsubst '$${DOMAIN} $${DOMAIN_CLIENT} $${DOMAIN_SERVER} $${MONGO_URI} $${REDIS_URI} $${AWS_REGION} $${AWS_BUCKET_NAME} $${POSTGRES_HOST} $${POSTGRES_PORT} $${POSTGRES_DB} $${POSTGRES_USER} $${GROQ_MODEL} $${ALLOW_REGISTRATION} $${ALLOW_EMAIL_LOGIN} $${ACM_CERT_ANNOTATION}' \
 		< values.yaml.tpl > "$(VALUES_OUT)"
 	@echo "Wrote $(VALUES_OUT)"
+	@grep -F 'apiKey: "$${GROQ_API_KEY}"' "$(VALUES_OUT)" >/dev/null \
+		|| (echo "ERROR: GROQ_API_KEY placeholder missing from rendered values" && exit 1)
 
 .PHONY: deploy
 deploy: secrets values

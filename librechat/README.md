@@ -1,6 +1,6 @@
-# LibreChat + Ollama on EKS (`core-cluster`)
+# LibreChat + Groq on EKS (`core-cluster`)
 
-Self-hosted [LibreChat](https://www.librechat.ai/) with in-cluster **Ollama**, wired to the PoC stores already in this repo (Mongo, Redis, Postgres/pgvector, S3). Public URL: **`https://librechat.ntwtech.com`**.
+Self-hosted [LibreChat](https://www.librechat.ai/) with **Groq** (OpenAI-compatible API), wired to the PoC stores already in this repo (Mongo, Redis, S3). Public URL: **`https://librechat.ntwtech.com`**.
 
 ## Prerequisites
 
@@ -9,13 +9,13 @@ Self-hosted [LibreChat](https://www.librechat.ai/) with in-cluster **Ollama**, w
 - Helm 3, `envsubst` (gettext), openssl
 - AWS Load Balancer Controller: `make -C ../ingress deploy`
 - Data stores:
-  - `make -C ../postgres deploy` — use **pgvector** image (see `postgres/makefile`)
   - `make -C ../redis deploy`
   - `make -C ../mongo deploy`
   - `make -C ../s3 create && make -C ../s3 create-user`
+  - Postgres optional (RAG API is **disabled** while using Groq — no embeddings API)
 - ACM certificate whose SANs include **`librechat.ntwtech.com`**
   - Set `ACM_CERTIFICATE_ARN` in [`../ingress/.env`](../ingress/.env)
-- GPU for Ollama: `make -C ../eks install-karpenter-config` (gpu-pool) + `make install-gpu-plugin`
+- Groq API key from https://console.groq.com/keys
 - Optional observability: `make -C ../grafana deploy`
 
 ## Quick path
@@ -33,19 +33,18 @@ make gen-secrets
 # Copy connection strings from:
 #   make -C ../mongo conninfo
 #   make -C ../redis conninfo
-#   make -C ../postgres conninfo
 # S3 keys are written by: make -C ../s3 create-user
-# Ensure POSTGRES_USER / POSTGRES_PASSWORD match ../postgres/.env
+# Set GROQ_API_KEY=... and OPENAI_API_KEY=... (same value) in .env
 
-make install-gpu-plugin
-make deploy-ollama
 make secrets
-make init-postgres
 make deploy
 make endpoints
+
+# If a previous Ollama GPU deploy is still pending:
+make destroy-ollama
 ```
 
-Point DNS (Route53 Alias/CNAME) for **`librechat.ntwtech.com`** at the ALB hostname from `make endpoints`.
+Point DNS (Route53 / Cloudflare CNAME) for **`librechat.ntwtech.com`** at the ALB hostname from `make endpoints`.
 
 ## DNS / ACM
 
@@ -62,34 +61,27 @@ Without a matching ACM cert, HTTPS on the ALB will fail even if HTTP redirect an
 |-----------|-----|--------|
 | LibreChat | Helm `oci://ghcr.io/danny-avila/librechat-chart/librechat` | Namespace `librechat`, port 3080 |
 | Meilisearch | Chart subchart | Search index |
-| RAG API | Chart subchart | Uses **external** Postgres + pgvector |
-| Ollama | `k8s/ollama/` | `gpu-pool`, models on PVC |
+| RAG API | Disabled | Groq has no embeddings; re-enable when wiring another embed provider |
 | Ingress | Helm → ALB (`ingressClassName: alb`) | Host `librechat.ntwtech.com` |
 
 External (not installed by this folder): Mongo, Redis, Postgres, S3, Grafana Alloy.
 
-## Self-hosted LLM (Ollama)
+## Groq models
 
-- Service: `http://ollama.librechat.svc.cluster.local:11434`
-- LibreChat custom endpoint + RAG embeddings both use Ollama
-- Defaults: chat `llama3.2`, embeddings `nomic-embed-text` (override via `.env` / `make deploy-ollama OLLAMA_MODEL=...`)
+Default chat model: `llama-3.3-70b-versatile` (`GROQ_MODEL` in `.env`).
 
-Smoke test:
+Also listed in config: `llama-3.1-8b-instant`, `gemma2-9b-it`.
 
-```bash
-kubectl -n librechat exec deploy/ollama -- ollama list
-kubectl -n librechat exec deploy/ollama -- curl -s http://127.0.0.1:11434/api/tags
-```
+LibreChat keeps `apiKey: "${GROQ_API_KEY}"` in config and expands it from the pod Secret at runtime.
 
 ## Makefile targets
 
 | Target | Purpose |
 |--------|---------|
 | `gen-secrets` | Fill empty `CREDS_*` / `JWT_*` / `MEILI_*` in `.env` |
-| `secrets` | Apply `librechat-credentials-env` + `librechat-vectordb` |
-| `init-postgres` | `CREATE DATABASE` + `CREATE EXTENSION vector` |
-| `install-gpu-plugin` | NVIDIA device plugin |
-| `deploy-ollama` | Ollama Deployment + model pull |
+| `secrets` | Apply `librechat-credentials-env` (+ vectordb secret for future RAG) |
+| `init-postgres` | Optional `CREATE DATABASE` + `CREATE EXTENSION vector` |
+| `destroy-ollama` | Remove leftover in-cluster Ollama / GPU pending pods |
 | `deploy` | Helm install/upgrade LibreChat |
 | `status` / `endpoints` | Ops helpers |
 | `destroy` | Remove LibreChat namespace |
@@ -103,7 +95,7 @@ librechat/
   .env.example
   values.yaml.tpl
   README.md
-  k8s/ollama/
+  k8s/ollama/          # optional / legacy GPU path
 eks/ ingress/ grafana/
 postgres/ redis/ mongo/ s3/
 ```
@@ -112,6 +104,5 @@ postgres/ redis/ mongo/ s3/
 
 - Do not commit `.env`.
 - Optional ECR cleanup after migration: delete unused `unpod-*` repositories in ECR.
-- If a leftover local `unpod/.cache` directory remains (nested git clone), delete it with `rm -rf unpod`.
 - Grafana Cloud already scrapes the cluster; filter Loki/Prometheus by `namespace="librechat"`.
-- If `init-postgres` fails on `CREATE EXTENSION vector`, recreate Postgres with the pgvector image (`make -C ../postgres destroy && make -C ../postgres deploy`) — **wipes DB data**.
+- To bring RAG back later: enable `librechat-rag-api` in `values.yaml.tpl` with a real embeddings provider (not Groq).
