@@ -87,6 +87,7 @@ telemetryServices:
   node-exporter:
     deploy: true
     # Skip eksctl System-NodeGroup (t4g.small) — only ~11 pods/node; DaemonSets fill them.
+    # Replaces chart default (fargate-only); keep both exclusions.
     affinity:
       nodeAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
@@ -95,6 +96,9 @@ telemetryServices:
                 - key: role
                   operator: NotIn
                   values: [system]
+                - key: eks.amazonaws.com/compute-type
+                  operator: NotIn
+                  values: [fargate]
   kepler:
     deploy: false
   opencost:
@@ -105,15 +109,17 @@ collectors:
     presets: [clustered, statefulset]
   alloy-logs:
     presets: [filesystem-log-reader, daemonset]
+    # Must be under controller.* (Alloy chart), not top-level affinity.
     # DaemonSet needs 1 pod per node; system t4g.small hits "Too many pods" quickly.
-    affinity:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: role
-                  operator: NotIn
-                  values: [system]
+    controller:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: role
+                    operator: NotIn
+                    values: [system]
   alloy-singleton:
     presets: [singleton]
   alloy-receiver:

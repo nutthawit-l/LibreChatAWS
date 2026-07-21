@@ -215,7 +215,8 @@ grafana/
 
 **Fix already in this repo:**
 
-1. DaemonSets exclude `role=system` (see `values.yaml.tpl`).
+1. DaemonSets exclude `role=system` via `collectors.alloy-logs.controller.affinity` and
+   `telemetryServices.node-exporter.affinity` (see `values.yaml.tpl`).
 2. Karpenter `core-pool` excludes `nano`/`micro`/`small`/`medium` — re-apply with:
    `make -C ../eks install-karpenter-config`
 
@@ -224,6 +225,7 @@ Then redeploy Grafana:
 ```bash
 make deploy
 kubectl -n grafana get pods -o wide
+# alloy-logs DESIRED should equal non-system nodes only (not 3 when 2 are role=system)
 ```
 
 If Pending remains on Karpenter nodes, check density: `kubectl describe node <name> | grep -A5 Allocatable` and wait for Karpenter to replace mediums with larger sizes.
