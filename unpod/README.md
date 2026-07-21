@@ -5,7 +5,7 @@ Optional: self-hosted LLM via vLLM on `gpu-pool`.
 
 ## Prerequisites
 
-- EKS cluster up (`make -C aws setup` / Karpenter NodePools applied)
+- EKS cluster up (`make -C eks setup` / Karpenter NodePools applied)
 - `kubectl` context pointing at `core-cluster`
 - Docker + AWS CLI
 - AWS Load Balancer Controller installed (for ALB Ingress)
@@ -18,18 +18,18 @@ Optional: self-hosted LLM via vLLM on `gpu-pool`.
   - `make -C postgres deploy`
   - `make -C redis deploy`
   - `make -C mongo deploy`
-  Then copy connection strings from each `make conninfo` into `aws/unpod/.env.prod`
+  Then copy connection strings from each `make conninfo` into `unpod/.env.prod`
 - LiveKit Cloud (or self-hosted) + STT/TTS API keys
 - For self-hosted LLM: GPU NodeClass + NVIDIA device plugin (see below)
 
 ## Quick path
 
 ```bash
-cd aws/unpod
+cd unpod
 
 # 1. Fill secrets
 cp .env.prod.example .env.prod
-# edit .env.prod — RDS/Redis/Mongo/LiveKit/AI keys + PUBLIC_* URLs
+# edit .env.prod — DB/LiveKit/AI keys + PUBLIC_* URLs
 
 # 2. Build & push images (clones unpod into .cache/unpod)
 make build-push
@@ -38,9 +38,9 @@ make build-push
 make deploy DOMAIN=yourdomain.com
 
 # 4. (Optional) Self-hosted LLM on GPU nodes
-make -C ../ install-karpenter-config   # applies nodeclass-gpu + gpu-pool
+make -C ../eks install-karpenter-config   # applies nodeclass-gpu + gpu-pool
 make install-gpu-plugin
-make deploy-llm                        # default: Qwen/Qwen2.5-7B-Instruct
+make deploy-llm                           # default: Qwen/Qwen2.5-7B-Instruct
 # or: make deploy-llm VLLM_MODEL=meta-llama/Llama-3.1-8B-Instruct
 
 # 5. Watch
@@ -69,7 +69,7 @@ alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:ACCOUNT:certifi
 
 ## Self-hosted LLM (vLLM)
 
-1. **GPU NodeClass** (`aws/karpenter/nodeclass-gpu.yaml`) uses `al2023@latest` so Karpenter selects the **NVIDIA accelerated AMI** when pods request `nvidia.com/gpu`.
+1. **GPU NodeClass** (`eks/karpenter/nodeclass-gpu.yaml`) uses `al2023@latest` so Karpenter selects the **NVIDIA accelerated AMI** when pods request `nvidia.com/gpu`.
 2. **`gpu-pool`** is tainted with `nvidia.com/gpu=true:NoSchedule` (on-demand only).
 3. **NVIDIA device plugin** exposes GPUs to the scheduler (`make install-gpu-plugin`).
 4. **vLLM** serves OpenAI-compatible API at `http://vllm.unpod.svc.cluster.local:8000/v1`.
@@ -112,17 +112,21 @@ Default model `Qwen/Qwen2.5-7B-Instruct` fits **g5.xlarge** (A10G 24GB). First s
 ## Layout
 
 ```
-aws/unpod/
+unpod/                    # app deploy (this folder)
   makefile
   .env.prod.example
-  docker/                 # prod Dockerfiles (backend + api-services)
-  k8s/base/               # platform manifests
+  docker/
+  k8s/base/
   k8s/overlays/prod/
-  k8s/voice/              # voice-executor
-  k8s/llm/                # vLLM on gpu-pool
-aws/karpenter/
-  nodeclass-gpu.yaml      # AL2023 NVIDIA AMI
-  nodepool-gpu.yaml       # tainted GPU pool
+  k8s/voice/
+  k8s/llm/
+eks/                      # cluster bootstrap
+  makefile
+  cluster.yaml
+  karpenter/
+    nodeclass-gpu.yaml
+    nodepool-gpu.yaml
+postgres/ redis/ mongo/   # PoC self-hosted DBs
 ```
 
 ## Notes

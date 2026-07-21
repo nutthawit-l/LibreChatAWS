@@ -192,7 +192,7 @@ deploy-voice: _render
 install-gpu-plugin:
 	@echo "Installing NVIDIA device plugin $(NVIDIA_DEVICE_PLUGIN_VERSION)..."
 	kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/$(NVIDIA_DEVICE_PLUGIN_VERSION)/deployments/static/nvidia-device-plugin.yml
-	@echo "Ensure gpu NodeClass/NodePool are applied: make -C .. install-karpenter-config"
+	@echo "Ensure gpu NodeClass/NodePool are applied: make -C ../eks install-karpenter-config"
 
 .PHONY: deploy-llm
 deploy-llm:

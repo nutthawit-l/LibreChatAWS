@@ -23,7 +23,7 @@ help:
 	@echo "  install-karpenter-config Apply NodeClass and NodePool manifests"
 	@echo "  setup                    Full bootstrap: roles, cluster, Karpenter"
 	@echo "  destroy                  Delete EKS cluster and Karpenter CFN stack"
-	@echo "  unpod-help               Show Unpod deploy targets (aws/unpod)"
+	@echo "  unpod-help               Show Unpod deploy targets (../unpod)"
 	@echo ""
 	@echo "Variables (override with VAR=value):"
 	@echo "  CLUSTER_NAME=$(CLUSTER_NAME)"
@@ -34,11 +34,11 @@ help:
 	@echo ""
 	@echo "Example:"
 	@echo "  make update-cluster-version K8S_VERSION=1.31"
-	@echo "  make -C unpod build-push && make -C unpod deploy DOMAIN=example.com"
+	@echo "  make -C ../unpod build-push && make -C ../unpod deploy DOMAIN=example.com"
 
 .PHONY: unpod-help
 unpod-help:
-	@$(MAKE) -C unpod help
+	@$(MAKE) -C ../unpod help
 
 .PHONY: check
 check:
