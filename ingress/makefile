@@ -149,6 +149,7 @@ deploy: create-iam tag-subnets repo ingressclass
 		--set vpcId=$$VPC \
 		--set serviceAccount.create=true \
 		--set serviceAccount.name=$(SERVICE_ACCOUNT) \
+		--set createIngressClassResource=false \
 		--wait --timeout 5m
 	@$(MAKE) --no-print-directory status
 	@echo ""
