@@ -13,6 +13,7 @@ help:
 	@echo "Targets:"
 	@echo "  check     Verify AWS identity"
 	@echo "  create    Create encrypted private bucket + CORS"
+	@echo "  create-user  Create IAM user + access keys → unpod/.env"
 	@echo "  status    Show bucket info"
 	@echo "  destroy   Empty and delete bucket (destructive)"
 	@echo "  conninfo  Print values for unpod/.env"
@@ -68,6 +69,11 @@ create: check
 	@echo ""
 	@echo "Created s3://$(BUCKET_NAME)"
 	@$(MAKE) --no-print-directory conninfo
+
+.PHONY: create-user
+create-user: check
+	@chmod +x create-iam-user.sh
+	BUCKET_NAME=$(BUCKET_NAME) REGION=$(REGION) ./create-iam-user.sh
 
 .PHONY: status
 status: check
