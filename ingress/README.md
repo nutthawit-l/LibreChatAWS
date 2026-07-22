@@ -87,3 +87,26 @@ ingress/
 - Chart pin: `CHART_VERSION` (default `1.14.0`). Bump `CONTROLLER_IAM_VERSION` / refresh `policies/iam-policy.json` together when upgrading.
 - `make destroy` does **not** delete live ALBs; delete the LibreChat Ingress (or `make -C ../librechat destroy`) first.
 - After Karpenter bootstrap: `make -C ../eks setup` → `make -C ../ingress deploy` → app deploys.
+
+## Troubleshooting
+
+### Target `unhealthy` / ALB timeouts / controller log about security groups
+
+Symptom in controller logs:
+
+```text
+expected exactly one securityGroup tagged with kubernetes.io/cluster/core-cluster for eni ..., got: []
+```
+
+Cause: Karpenter worker ENIs used SGs that lacked `kubernetes.io/cluster/<name>` (often after selecting both ClusterSharedNode + ControlPlane via `karpenter.sh/discovery`).
+
+Fix (also in `../eks`):
+
+```bash
+make -C ../eks tag-security-groups
+make -C ../eks install-karpenter-config
+# recycle Karpenter nodes so they attach only eks-cluster-sg
+kubectl delete node <karpenter-node-name>
+```
+
+ALB controller then opens the pod port from its backend SG automatically.

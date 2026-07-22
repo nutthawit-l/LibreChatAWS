@@ -20,7 +20,8 @@ help:
 	@echo "  update-cluster-version   Upgrade EKS control plane to K8S_VERSION"
 	@echo "  wire-karpenter-iam       Configure pod identity and node IAM mapping"
 	@echo "  install-karpenter        Install/upgrade Karpenter via Helm"
-	@echo "  install-karpenter-config Apply NodeClass and NodePool manifests"
+	@echo "  tag-security-groups      Tag SGs for Karpenter + ALB controller (ENI rules)"
+	@echo "  install-karpenter-config Apply NodeClass/NodePool (+ tag-security-groups)"
 	@echo "  install-ebs-csi          Install EBS CSI addon + gp3 StorageClass"
 	@echo "  setup                    Full bootstrap: roles, cluster, Karpenter"
 	@echo "  destroy                  Delete EKS cluster and Karpenter CFN stack"
@@ -126,8 +127,40 @@ install-karpenter: wire-karpenter-iam
 	kubectl rollout restart deployment/karpenter -n $(KARPENTER_NAMESPACE)
 	kubectl rollout status deployment/karpenter -n $(KARPENTER_NAMESPACE) --timeout=180s
 
+.PHONY: tag-security-groups
+tag-security-groups: check
+	@echo "Fixing security-group tags for Karpenter + AWS Load Balancer Controller..."
+	@CLUSTER_SG=$$(aws ec2 describe-security-groups --region $(REGION) \
+		--filters "Name=tag:aws:eks:cluster-name,Values=$(CLUSTER_NAME)" \
+		--query 'SecurityGroups[0].GroupId' --output text); \
+	if [ -z "$$CLUSTER_SG" ] || [ "$$CLUSTER_SG" = "None" ]; then \
+		echo "ERROR: no SG with tag aws:eks:cluster-name=$(CLUSTER_NAME)"; exit 1; \
+	fi; \
+	echo "  $$CLUSTER_SG (eks-cluster-sg) → karpenter.sh/discovery=$(CLUSTER_NAME)"; \
+	aws ec2 create-tags --region $(REGION) --resources $$CLUSTER_SG \
+		--tags Key=karpenter.sh/discovery,Value=$(CLUSTER_NAME); \
+	SHARED=$$(aws ec2 describe-security-groups --region $(REGION) \
+		--filters "Name=tag:aws:cloudformation:logical-id,Values=ClusterSharedNodeSecurityGroup" \
+			"Name=tag:alpha.eksctl.io/cluster-name,Values=$(CLUSTER_NAME)" \
+		--query 'SecurityGroups[0].GroupId' --output text); \
+	if [ -n "$$SHARED" ] && [ "$$SHARED" != "None" ]; then \
+		echo "  $$SHARED (ClusterSharedNode) → kubernetes.io/cluster/$(CLUSTER_NAME)=shared"; \
+		aws ec2 create-tags --region $(REGION) --resources $$SHARED \
+			--tags Key=kubernetes.io/cluster/$(CLUSTER_NAME),Value=shared; \
+	fi; \
+	CP=$$(aws ec2 describe-security-groups --region $(REGION) \
+		--filters "Name=tag:aws:cloudformation:logical-id,Values=ControlPlaneSecurityGroup" \
+			"Name=tag:alpha.eksctl.io/cluster-name,Values=$(CLUSTER_NAME)" \
+		--query 'SecurityGroups[0].GroupId' --output text); \
+	if [ -n "$$CP" ] && [ "$$CP" != "None" ]; then \
+		echo "  $$CP (ControlPlane) → remove karpenter.sh/discovery (not for workers)"; \
+		aws ec2 delete-tags --region $(REGION) --resources $$CP \
+			--tags Key=karpenter.sh/discovery 2>/dev/null || true; \
+	fi; \
+	echo "Done. New Karpenter nodes use eks-cluster-sg; existing nodes may need recycle."
+
 .PHONY: install-karpenter-config
-install-karpenter-config:
+install-karpenter-config: tag-security-groups
 	kubectl apply -f karpenter/nodeclass.yaml
 	kubectl apply -f karpenter/nodeclass-gpu.yaml
 	kubectl apply -f karpenter/nodepool-core.yaml

@@ -12,9 +12,10 @@ spec:
     - tags:
         karpenter.sh/discovery: "core-cluster"
 
+  # Same as default NodeClass — EKS cluster SG only (ALB-controller friendly).
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "core-cluster"
+        aws:eks:cluster-name: "core-cluster"
 
   # Model weights + container layers need disk
   blockDeviceMappings:

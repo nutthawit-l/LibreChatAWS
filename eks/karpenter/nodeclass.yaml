@@ -12,9 +12,12 @@ spec:
     - tags:
         karpenter.sh/discovery: "core-cluster"
 
+  # Use the EKS-managed cluster SG (has kubernetes.io/cluster/<name>).
+  # Do NOT select ControlPlaneSecurityGroup via karpenter.sh/discovery — ALB
+  # controller requires exactly one ENI SG tagged kubernetes.io/cluster/<name>.
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "core-cluster"
+        aws:eks:cluster-name: "core-cluster"
 
   blockDeviceMappings:
     - deviceName: /dev/xvda
