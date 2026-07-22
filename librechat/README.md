@@ -105,4 +105,5 @@ postgres/ redis/ mongo/ s3/
 - Do not commit `.env`.
 - Optional ECR cleanup after migration: delete unused `unpod-*` repositories in ECR.
 - Grafana Cloud already scrapes the cluster; filter Loki/Prometheus by `namespace="librechat"`.
+- Backend tracing: `OTEL_*` in `.env` points at Alloy (`make -C ../grafana endpoints`). In Grafana: **Drilldown → Traces** or **Explore → Tempo**, service `librechat`.
 - To bring RAG back later: enable `librechat-rag-api` in `values.yaml.tpl` with a real embeddings provider (not Groq).

@@ -44,6 +44,12 @@ librechat:
     ALLOW_EMAIL_LOGIN: "${ALLOW_EMAIL_LOGIN}"
     AWS_REGION: "${AWS_REGION}"
     AWS_BUCKET_NAME: "${AWS_BUCKET_NAME}"
+    # Backend OTEL → in-cluster Alloy receiver → Grafana Cloud Tempo
+    OTEL_TRACING_ENABLED: "${OTEL_TRACING_ENABLED}"
+    OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME}"
+    OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT}"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "${OTEL_EXPORTER_OTLP_PROTOCOL}"
+    OTEL_TRACES_EXPORTER: "${OTEL_TRACES_EXPORTER}"
     # Credentials live in Secret librechat-credentials-env
   configYamlContent: |
     version: 1.2.1
