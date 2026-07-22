@@ -71,6 +71,18 @@ librechat:
           summarize: false
           summaryModel: "current_model"
           modelDisplayLabel: "Groq"
+        - name: "Self-host"
+          apiKey: "ollama"
+          baseURL: "http://ollama.librechat.svc.cluster.local:11434/v1/"
+          models:
+            default:
+              - "${OLLAMA_MODEL}"
+            fetch: false
+          titleConvo: true
+          titleModel: "current_model"
+          summarize: false
+          summaryModel: "current_model"
+          modelDisplayLabel: "Self-host"
 
 ingress:
   enabled: true

@@ -1,6 +1,6 @@
 # LibreChat on AWS EKS (PoC)
 
-Self-hosted [LibreChat](https://www.librechat.ai/) บน **Amazon EKS** พร้อม LLM ผ่าน **Groq** (OpenAI-compatible API)  
+Self-hosted [LibreChat](https://www.librechat.ai/) บน **Amazon EKS** พร้อม LLM ผ่าน **Groq** และ **Ollama self-host** (`qwen2.5:0.5b` บน `g5g` ARM)  
 Public URL: **`https://librechat.ntwtech.com`**
 
 โปรเจกต์นี้เป็น PoC ฝั่ง infrastructure / platform: bootstrap cluster, data stores, ingress, observability และ deploy แอปด้วย Makefile แยกตามคอมโพเนนต์
@@ -10,7 +10,7 @@ Public URL: **`https://librechat.ntwtech.com`**
 ## สิ่งที่ระบบทำ
 
 ผู้ใช้เข้าเว็บ LibreChat ผ่าน HTTPS → ALB → Pod บน EKS  
-แชทไปที่ **Groq API** (เช่น `llama-3.3-70b-versatile`)  
+แชทไปที่ **Groq API** และ/หรือ **Ollama ในคลัสเตอร์** (เลือก endpoint ใน UI)  
 ข้อมูล session / user เก็บใน **MongoDB**, cache ใน **Redis**, ไฟล์ media ใน **S3**  
 เมตริก / ล็อก / เทรซ ส่งไป **Grafana Cloud** ผ่าน Grafana Alloy ในคลัสเตอร์
 
@@ -23,6 +23,7 @@ ALB (AWS Load Balancer Controller)
    ▼
 LibreChat Pod (ns: librechat)
    ├──► Groq API          (chat / completions)
+   ├──► Ollama (g5g)      (self-host / ClusterIP)
    ├──► MongoDB           (users, conversations)
    ├──► Redis             (cache / sessions)
    ├──► S3                (uploads / media)
@@ -38,7 +39,8 @@ LibreChat Pod (ns: librechat)
 | Orchestration | Amazon EKS 1.30 (`core-cluster`, `us-east-1`) |
 | Autoscaling | Karpenter (Spot + On-Demand, consolidate เมื่อ idle) |
 | App | LibreChat (Helm OCI chart) |
-| LLM | Groq (`llama-3.3-70b-versatile` เป็น default) |
+| LLM (hosted) | Groq (`llama-3.3-70b-versatile` เป็น default) |
+| LLM (self-host) | Ollama `qwen2.5:0.5b` on `gpu-pool` (`g5g` ARM + T4G; needs G/VT On-Demand vCPU quota &gt; 0) |
 | Datastores | MongoDB 7, Redis 7, S3; Postgres/pgvector พร้อมไว้ (RAG ปิดอยู่) |
 | Ingress | AWS Load Balancer Controller → internet-facing ALB |
 | TLS | ACM + DNS (`librechat.ntwtech.com`) |
@@ -135,7 +137,7 @@ make deploy
 make endpoints                     # OTLP URL ในคลัสเตอร์สำหรับ LibreChat
 ```
 
-### 5) Deploy LibreChat
+### 5) Deploy LibreChat (+ optional self-host Ollama)
 
 ```bash
 cd librechat
@@ -146,7 +148,13 @@ make gen-secrets
 #   MONGO_URI / REDIS_URI จากขั้นตอน 3
 #   AWS_* จาก s3 create-user
 #   GROQ_API_KEY=... และ OPENAI_API_KEY=ค่าเดียวกัน
+#   OLLAMA_MODEL=qwen2.5:0.5b   # default สำหรับ Self-host
 #   ACM ถูกอ่านจาก ../ingress/.env อัตโนมัติ
+
+# GPU path (g5g ARM) — apply NodePool ถ้าเพิ่งแก้:
+# kubectl apply -f ../eks/karpenter/nodepool-gpu.yaml
+make install-gpu-plugin
+make deploy-llm
 
 make secrets
 make deploy
@@ -155,7 +163,8 @@ make endpoints
 
 ชี้ DNS (Route53 / Cloudflare) **`librechat.ntwtech.com`** → ALB hostname จาก `make endpoints`
 
-เปิด `https://librechat.ntwtech.com` แล้ว register / login ได้ตาม `ALLOW_REGISTRATION`
+เปิด `https://librechat.ntwtech.com` แล้ว register / login ได้ตาม `ALLOW_REGISTRATION`  
+ใน UI เลือก endpoint **Groq** หรือ **Self-host** (`qwen2.5:0.5b`)
 
 ---
 
@@ -165,13 +174,15 @@ make endpoints
 
 - **System NodeGroup** คงที่เล็ก ๆ สำหรับ add-on / system pods
 - **Karpenter `core-pool`** สเกล worker ตาม pending pods — ใช้ Spot เป็นหลัก, ตัดขนาด `nano`–`medium` ทิ้งเพราะ DaemonSet (Alloy, node-exporter) เต็ม maxPods ง่าย
-- มี **GPU NodePool** ไว้สำหรับ path เก่า (Ollama) — ตอนนี้ LLM ไป Groq แล้ว ไม่จำเป็นต้องมี GPU ในคลัสเตอร์
+- **`gpu-pool`**: `arm64` + `g5g` สำหรับ Ollama — ต้องมี **G/VT On-Demand vCPU quota > 0**
+- NodeClass `gpu` pin AMI AL2023 **arm64 NVIDIA** ผ่าน SSM
 - Disruption: `WhenEmptyOrUnderutilized` เพื่อ consolidate ประหยัดค่าใช้จ่าย
 
-### LibreChat + Groq
+### LibreChat + Groq + Ollama
 
 - Chart ปิด embedded Mongo/Redis — ชี้ไป datastore ที่ deploy เอง
-- Endpoint แบบ custom OpenAI-compatible ไปที่ `https://api.groq.com/openai/v1/`
+- Endpoint Groq: OpenAI-compatible ไปที่ `https://api.groq.com/openai/v1/`
+- Endpoint Self-host: `http://ollama.librechat.svc.cluster.local:11434/v1/` (ClusterIP เท่านั้น)
 - Secrets (JWT, Groq key, S3 keys) อยู่ใน K8s Secret `librechat-credentials-env`
 - **RAG API ปิด** เพราะ Groq ไม่มี embeddings API — Postgres/pgvector พร้อมเปิดเมื่อต่อ embed provider อื่น
 
@@ -198,7 +209,7 @@ make endpoints
 | `mongo` / `redis` / `postgres` | `make deploy` / `make conninfo` | StatefulSet + connection string |
 | `s3` | `make create` / `make create-user` | Bucket + IAM keys |
 | `grafana` | `make deploy` / `make endpoints` | Alloy → Grafana Cloud |
-| `librechat` | `make deploy` / `make status` / `make destroy` | แอปหลัก |
+| `librechat` | `make deploy` / `make deploy-llm` / `make status` | แอป + Ollama |
 
 ทุกโฟลเดอร์รองรับ `make help`
 
@@ -209,17 +220,20 @@ make endpoints
 1. **ทำไม self-host LibreChat บน EKS?**  
    ควบคุม data residency, ผูก LLM provider ได้ยืดหยุ่น, ฝึก pattern เดียวกับ production K8s (Ingress, Secrets, StatefulSets, autoscaling)
 
-2. **ทำไม Groq แทน Ollama ในคลัสเตอร์?**  
-   ลดความซับซ้อนและค่า GPU node; latency/throughput ของ hosted inference ดีพอสำหรับ PoC; ยังคง OpenAI-compatible อยู่แล้วสลับ provider ได้
+2. **ทำไมมีทั้ง Groq และ Ollama?**  
+   Groq ให้คุณภาพ/ความเร็วสำหรับ PoC แชทจริง; Ollama บน `g5g` ใช้ทดสอบ self-host path ด้วยโมเดลเล็ก (`qwen2.5:0.5b`) เพื่อคุมงบ GPU
 
-3. **ทำไม datastore เป็น StatefulSet ในคลัสเตอร์?**  
+3. **ทำไม `g5g` (ARM)?**  
+   ราคาถูกกว่า g4dn ใน us-east-1; โมเดล 0.5B เล็ก — ต้องมี G/VT On-Demand vCPU quota ก่อน (limit = 0 จะได้ `VcpuLimitExceeded`)
+
+4. **ทำไม datastore เป็น StatefulSet ในคลัสเตอร์?**  
    PoC เร็ว ไม่ต้อง provision RDS/ElastiCache; ใช้ EBS gp3 + EBS CSI; production จริงอาจย้ายไป managed service
 
-4. **ทำไมแยกโฟลเดอร์ + Makefile แทน monorepo Helm เดียว?**  
+5. **ทำไมแยกโฟลเดอร์ + Makefile แทน monorepo Helm เดียว?**  
    deploy / destroy / debug ทีละชั้นได้, ชัดว่า IAM/ALB คนละ concern กับแอป, สะดวกอธิบาย dependency ในสัมภาษณ์
 
-5. **ทำไม Spot + consolidation?**  
-   PoC คุมงบ; system node คงที่, workload ขึ้น-ลงตาม Karpenter
+6. **ทำไม Spot + consolidation?**  
+   PoC คุมงบ; system node คงที่, workload ขึ้น-ลงตาม Karpenter (`gpu-pool` ใช้ on-demand เพื่อเสถียรภาพ inference)
 
 ---
 
@@ -229,6 +243,7 @@ make endpoints
 
 ```bash
 make -C librechat destroy
+make -C librechat destroy-llm   # ถ้าเคย deploy Ollama
 make -C mongo destroy      # ลบ PVC ด้วย
 make -C redis destroy
 make -C postgres destroy   # ถ้าเคย deploy
@@ -245,6 +260,7 @@ make -C eks destroy
 - อย่า commit `.env`, `.values.generated.yaml`, หรือ secret ที่ generate แล้ว
 - S3 access key ใน `librechat/.env` ถูก unexport ตอนรัน make เพื่อไม่ทับ AWS CLI credential ของโฮสต์ (สำคัญกับ `aws-iam-authenticator`)
 - ACM + DNS ต้องตรงกับ `DOMAIN` ไม่เช่นนั้น HTTPS บน ALB จะล้มแม้แอปขึ้นปกติ
+- Ollama เป็น ClusterIP เท่านั้น — ไม่เปิดออก internet
 
 ---
 
@@ -255,9 +271,10 @@ kubectl get nodes
 kubectl -n librechat get pods,svc,ingress
 make -C librechat endpoints
 make -C librechat status
+make -C librechat status-llm   # ถ้า deploy Ollama แล้ว
 
 # ล็อก / เทรซ (ถ้า deploy grafana แล้ว)
 # Grafana Cloud → Explore → Loki/Tempo กรอง namespace="librechat"
 ```
 
-เปิดเบราว์เซอร์ที่ `https://librechat.ntwtech.com` แล้วลองแชทกับโมเดล Groq ได้ถือว่า end-to-end สำเร็จ
+เปิดเบราว์เซอร์ที่ `https://librechat.ntwtech.com` แล้วลองแชทกับ **Groq** หรือ **Self-host** ได้ถือว่า end-to-end สำเร็จ

@@ -3,9 +3,11 @@ kind: EC2NodeClass
 metadata:
   name: gpu
 spec:
-  # Karpenter picks the AL2023 NVIDIA accelerated AMI when pods request nvidia.com/gpu
+  # Must match the cluster Kubernetes version (core-cluster is on 1.31).
+  # Alias al2023@latest was resolving only x86_64 NVIDIA AMIs → arch conflict with arm64 NodePool.
+  amiFamily: AL2023
   amiSelectorTerms:
-    - alias: al2023@latest
+    - ssmParameter: /aws/service/eks/optimized-ami/1.31/amazon-linux-2023/arm64/nvidia/recommended/image_id
   role: "KarpenterNodeRole-core-cluster"
 
   subnetSelectorTerms:
